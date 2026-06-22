@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Коридор • Quoridor • Умный ИИ</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #1a241e;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .game-wrapper {
+            background: #26332b;
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.7);
+            border: 2px solid #4d6b55;
+        }
+        canvas {
+            display: block;
+            background: #f2e2c3;
+            border-radius: 18px;
+            box-shadow: inset 0 0 12px #4a3828, 0 10px 18px black;
+            border: 3px solid #6b5a42;
+            cursor: pointer;
+        }
+        .panel {
+            margin-top: 14px;
+            background: #1c2922;
+            border-radius: 28px;
+            padding: 12px 16px;
+            color: #f0e5cc;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            box-shadow: 0 4px 0 #0f1712;
+        }
+        .turn-badge { font-weight: bold; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+        .p1-dot { width: 18px; height: 18px; background: #d1544a; border-radius: 50%; display: inline-block; }
+        .p2-dot { width: 18px; height: 18px; background: #3f6ea8; border-radius: 50%; display: inline-block; }
+        .mode-indicator { padding: 5px 14px; border-radius: 18px; font-weight: bold; font-size: 0.9rem; }
+        .mode-walk { background: #4a6b3a; color: #d4f0b0; }
+        .mode-wall { background: #8b5a2b; color: #ffe0b0; }
+        button {
+            background: #f0daa5; border: none; font-weight: bold; padding: 8px 14px;
+            border-radius: 24px; cursor: pointer; color: #2b2819;
+            box-shadow: 0 3px 0 #7d6e4c, 0 3px 8px black;
+            border: 1px solid #c4a164; font-size: 0.8rem;
+        }
+        button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5a4e34; }
+        select {
+            padding: 8px 12px; border-radius: 20px; background: #f3e2bf;
+            font-weight: bold; border: 1px solid #b4924a; font-size: 0.8rem;
+        }
+        .wall-info { background: #4c4332; padding: 5px 14px; border-radius: 18px; font-weight: bold; }
+        .hint { color: #cfc19b; font-size: 0.7rem; text-align: center; margin-top: 6px; }
+        .key-tag { background: #b3a582; padding: 2px 8px; border-radius: 10px; color: #1f2a1a; font-weight: bold; }
+
+        .history-panel {
+            background: #1c2922;
+            border-radius: 24px;
+            padding: 16px;
+            color: #f0e5cc;
+            width: 220px;
+            max-height: 600px;
+            overflow-y: auto;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            border: 2px solid #4d6b55;
+            display: flex;
+            flex-direction: column;
+        }
+        .history-panel h3 {
+            margin-bottom: 10px;
+            font-size: 1rem;
+            color: #fbe49b;
+            text-align: center;
+        }
+        .history-item {
+            background: #2a3a31;
+            border-radius: 12px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            font-size: 0.75rem;
+            border: 1px solid #5a7b64;
+        }
+        .history-item .winner {
+            font-weight: bold;
+            color: #f5e56c;
+        }
+        .history-item .date {
+            color: #b3a582;
+            font-size: 0.65rem;
+        }
+        .clear-btn {
+            margin-top: 8px;
+            background: #b14545;
+            color: #ffe0e0;
+            font-size: 0.7rem;
+            padding: 6px 10px;
+            box-shadow: 0 2px 0 #5e2e2e;
+            border: 1px solid #c46b6b;
+        }
+    </style>
+</head>
+<body>
+<div class="main-container">
+    <div class="game-wrapper">
+        <canvas id="gameCanvas" width="540" height="540"></canvas>
+        <div class="panel">
+            <div class="turn-badge" id="turnDisplay"><span class="p1-dot"></span> Ход Игрока 1</div>
+            <div id="modeDisplay" class="mode-indicator mode-walk">🚶 ХОДЬБА</div>
+            <div class="wall-info" id="wallInfo">🧱 P1-10 / P2-10</div>
+            <select id="modeSelect">
+                <option value="pvp">👥 2 игрока</option>
+                <option value="ai">🤖 ИИ</option>
+            </select>
+            <button id="newGameBtn">🔄 Новая</button>
+            <button id="saveBtn">💾</button>
+        </div>
+        <div class="hint">
+            🖱️ <span class="key-tag">Клик</span> — действие | 🔄 <span class="key-tag">ПРОБЕЛ</span> — режим
+        </div>
+    </div>
+    <div class="history-panel" id="historyPanel">
+        <h3>📜 История матчей</h3>
+        <div id="historyList">Загрузка...</div>
+        <button class="clear-btn" id="clearHistoryBtn">🗑️ Очистить историю</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    const SIZE = 9;
+    const CELL = 54;
+    const PAD = 18;
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = SIZE * CELL + PAD * 2;
+    canvas.height = SIZE * CELL + PAD * 2;
+
+    let hWalls = Array(SIZE - 1).fill().map(() => Array(SIZE).fill(false));
+    let vWalls = Array(SIZE).fill().map(() => Array(SIZE - 1).fill(false));
+    let wallsLeft = { p1: 10, p2: 10 };
+    let players = { p1: { r: 0, c: 4 }, p2: { r: 8, c: 4 } };
+    let turn = 'p1';
+    let gameOver = false;
+    let winnerMsg = '';
+    let mode = 'pvp';
+    let currentMode = 'walk';
+    let moves = [];
+    let wallOptions = [];
+    let hoveredWall = null;
+    let aiTimeout = null;
+    let movesCount = 0;
+    let gameSaved = false;
+
+    const STORE = 'quoridor9_db';
+    const getDB = () => JSON.parse(localStorage.getItem(STORE) || '[]');
+    const saveDB = (r) => { const d = getDB(); d.push(r); localStorage.setItem(STORE, JSON.stringify(d)); };
+    const clearDB = () => { localStorage.removeItem(STORE); };
+
+    function autoSave() {
+        if (gameSaved) return;
+        const record = {
+            date: new Date().toLocaleString(),
+            winner: winnerMsg,
+            mode: mode === 'ai' ? 'ИИ' : '2 игрока',
+            moves: movesCount
+        };
+        saveDB(record);
+        gameSaved = true;
+        updateHistoryPanel();
+    }
+
+    function updateHistoryPanel() {
+        const data = getDB();
+        const list = document.getElementById('historyList');
+        if (!data.length) {
+            list.innerHTML = '<div class="history-item">Нет сыгранных матчей</div>';
+            return;
+        }
+        const recent = data.slice(-10).reverse();
+        list.innerHTML = recent.map((r, i) => `
+            <div class="history-item">
+                <div class="winner">${r.winner}</div>
+                <div>Режим: ${r.mode}</div>
+                <div>Ходов: ${r.moves}</div>
+                <div class="date">${r.date}</div>
+            </div>
+        `).join('');
+    }
+
+    function reset() {
+        if (aiTimeout) clearTimeout(aiTimeout);
+        aiTimeout = null;
+        hWalls = Array(SIZE - 1).fill().map(() => Array(SIZE).fill(false));
+        vWalls = Array(SIZE).fill().map(() => Array(SIZE - 1).fill(false));
+        wallsLeft = { p1: 10, p2: 10 };
+        players = { p1: { r: 0, c: 4 }, p2: { r: 8, c: 4 } };
+        turn = 'p1';
+        gameOver = false;
+        winnerMsg = '';
+        currentMode = 'walk';
+        hoveredWall = null;
+        movesCount = 0;
+        gameSaved = false;
+        updateAll();
+        draw();
+        if (mode === 'ai') {
+            aiTimeout = setTimeout(aiTurn, 500);
+        }
+    }
+
+    function canPass(r, c, nr, nc) {
+        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) return false;
+        const dr = nr - r, dc = nc - c;
+        if (dr === -1) return !hWalls[r - 1][c];
+        if (dr === 1) return !hWalls[r][c];
+        if (dc === -1) return !vWalls[r][c - 1];
+        if (dc === 1) return !vWalls[r][c];
+        return false;
+    }
+
+    function hasPath(sr, sc, targetRow) {
+        const vis = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+        const q = [{ r: sr, c: sc }];
+        vis[sr][sc] = true;
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        while (q.length) {
+            const { r, c } = q.shift();
+            if (r === targetRow) return true;
+            for (const [dr, dc] of dirs) {
+                const nr = r + dr, nc = c + dc;
+                if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+                if (!canPass(r, c, nr, nc)) continue;
+                if (!vis[nr][nc]) {
+                    vis[nr][nc] = true;
+                    q.push({ r: nr, c: nc });
+                }
+            }
+        }
+        return false;
+    }
+
+    function shortestPath(sr, sc, targetRow) {
+        const vis = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+        const q = [{ r: sr, c: sc, dist: 0 }];
+        vis[sr][sc] = true;
+        const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        while (q.length) {
+            const { r, c, dist } = q.shift();
+            if (r === targetRow) return dist;
+            for (const [dr, dc] of dirs) {
+                const nr = r + dr, nc = c + dc;
+                if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+                if (!canPass(r, c, nr, nc)) continue;
+                if (!vis[nr][nc]) {
+                    vis[nr][nc] = true;
+                    q.push({ r: nr, c: nc, dist: dist + 1 });
+                }
+            }
+        }
+        return Infinity;
+    }
+
+    function checkWin() {
+        if (players.p1.r === 8) {
+            gameOver = true; winnerMsg = '🏆 Игрок 1 победил!';
+            if (aiTimeout) clearTimeout(aiTimeout);
+            autoSave();
+        } else if (players.p2.r === 0) {
+            gameOver = true; winnerMsg = '🏆 Игрок 2 победил!';
+            if (aiTimeout) clearTimeout(aiTimeout);
+            autoSave();
+        }
+        updateUI();
+    }
+
+    function updateAll() {
+        calcMoves();
+        calcWallOptions();
+        updateUI();
+    }
+
+    function calcMoves() {
+        if (gameOver) { moves = []; return; }
+        const p = players[turn];
+        const other = turn === 'p1' ? players.p2 : players.p1;
+        const res = [];
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nr = p.r + dr, nc = p.c + dc;
+            if (!canPass(p.r, p.c, nr, nc)) continue;
+            if (nr === other.r && nc === other.c) {
+                const jr = nr + dr, jc = nc + dc;
+                if (jr >= 0 && jr < SIZE && jc >= 0 && jc < SIZE &&
+                    canPass(nr, nc, jr, jc) &&
+                    !(jr === players.p1.r && jc === players.p1.c) &&
+                    !(jr === players.p2.r && jc === players.p2.c)) {
+                    res.push({ r: jr, c: jc, jump: true });
+                }
+            } else {
+                res.push({ r: nr, c: nc, jump: false });
+            }
+        }
+        moves = res;
+    }
+
+    function calcWallOptions() {
+        if (gameOver) { wallOptions = []; return; }
+        const key = turn === 'p1' ? 'p1' : 'p2';
+        if (wallsLeft[key] <= 0) { wallOptions = []; return; }
+        const options = [];
+        for (let r = 0; r < SIZE - 1; r++) {
+            for (let c = 0; c < SIZE - 1; c++) {
+                if (!hWalls[r][c] && !hWalls[r][c + 1]) {
+                    hWalls[r][c] = true; hWalls[r][c + 1] = true;
+                    if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+                        options.push({ type: 'h', r, c });
+                    }
+                    hWalls[r][c] = false; hWalls[r][c + 1] = false;
+                }
+                if (!vWalls[r][c] && !vWalls[r + 1][c]) {
+                    vWalls[r][c] = true; vWalls[r + 1][c] = true;
+                    if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+                        options.push({ type: 'v', r, c });
+                    }
+                    vWalls[r][c] = false; vWalls[r + 1][c] = false;
+                }
+            }
+        }
+        wallOptions = options;
+    }
+
+    function getAvailableMoves(player) {
+        const p = players[player];
+        const other = player === 'p1' ? players.p2 : players.p1;
+        const res = [];
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nr = p.r + dr, nc = p.c + dc;
+            if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+            if (!canPass(p.r, p.c, nr, nc)) continue;
+            if (nr === other.r && nc === other.c) {
+                const jr = nr + dr, jc = nc + dc;
+                if (jr >= 0 && jr < SIZE && jc >= 0 && jc < SIZE &&
+                    canPass(nr, nc, jr, jc) &&
+                    !(jr === players.p1.r && jc === players.p1.c) &&
+                    !(jr === players.p2.r && jc === players.p2.c)) {
+                    res.push({ r: jr, c: jc });
+                }
+            } else {
+                res.push({ r: nr, c: nc });
+            }
+        }
+        return res;
+    }
+
+    function getAllPossibleWalls(player) {
+        if (wallsLeft[player] <= 0) return [];
+        const walls = [];
+        for (let r = 0; r < SIZE - 1; r++) {
+            for (let c = 0; c < SIZE - 1; c++) {
+                if (!hWalls[r][c] && !hWalls[r][c + 1]) walls.push({ type: 'h', r, c });
+                if (!vWalls[r][c] && !vWalls[r + 1][c]) walls.push({ type: 'v', r, c });
+            }
+        }
+        return walls;
+    }
+
+    function saveState() {
+        return {
+            hWalls: hWalls.map(r => [...r]),
+            vWalls: vWalls.map(r => [...r]),
+            wallsLeft: {...wallsLeft},
+            p1: {...players.p1},
+            p2: {...players.p2}
+        };
+    }
+
+    function restoreState(state) {
+        hWalls = state.hWalls.map(r => [...r]);
+        vWalls = state.vWalls.map(r => [...r]);
+        wallsLeft = {...state.wallsLeft};
+        players.p1 = {...state.p1};
+        players.p2 = {...state.p2};
+    }
+
+    function applyWall(wall) {
+        if (wall.type === 'h') {
+            hWalls[wall.r][wall.c] = true;
+            hWalls[wall.r][wall.c + 1] = true;
+        } else {
+            vWalls[wall.r][wall.c] = true;
+            vWalls[wall.r + 1][wall.c] = true;
+        }
+    }
+
+    function movePlayer(r, c) {
+        if (!moves.some(m => m.r === r && m.c === c)) return false;
+        players[turn].r = r;
+        players[turn].c = c;
+        movesCount++;
+        checkWin();
+        return true;
+    }
+
+    function placeWall(type, r, c) {
+        if (gameOver) return false;
+        const key = turn === 'p1' ? 'p1' : 'p2';
+        if (wallsLeft[key] <= 0) return false;
+        if (type === 'h') {
+            if (hWalls[r][c] || hWalls[r][c + 1]) return false;
+            hWalls[r][c] = true; hWalls[r][c + 1] = true;
+        } else {
+            if (vWalls[r][c] || vWalls[r + 1][c]) return false;
+            vWalls[r][c] = true; vWalls[r + 1][c] = true;
+        }
+        if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+            wallsLeft[key]--;
+            movesCount++;
+            return true;
+        } else {
+            if (type === 'h') { hWalls[r][c] = false; hWalls[r][c + 1] = false; }
+            else { vWalls[r][c] = false; vWalls[r + 1][c] = false; }
+            return false;
+        }
+    }
+
+    function switchTurn() {
+        if (gameOver) return;
+        turn = turn === 'p1' ? 'p2' : 'p1';
+        currentMode = 'walk';
+        hoveredWall = null;
+        updateAll();
+        draw();
+        if (mode === 'ai' && turn === 'p2' && !gameOver) {
+            aiTimeout = setTimeout(aiTurn, 300);
+        }
+    }
+
+    function toggleMode() {
+        if (gameOver) return;
+        currentMode = currentMode === 'walk' ? 'wall' : 'walk';
+        hoveredWall = null;
+        updateUI();
+        draw();
+    }
+
+    // ========== МЕГА-УМНЫЙ ИИ ==========
+    function aiTurn() {
+        if (gameOver || turn !== 'p2') return;
+        updateAll();
+        aiUltra();
+        draw();
+        updateUI();
+        if (!gameOver) {
+            turn = 'p1';
+            currentMode = 'walk';
+            hoveredWall = null;
+            updateAll();
+            draw();
+        }
+    }
+
+    function aiUltra() {
+        const MAX_DEPTH = 6;
+        let bestScore = -Infinity;
+        let bestAction = null;
+        const state = saveState();
+
+        const aiMoves = getAvailableMoves('p2');
+        const aiWalls = wallsLeft.p2 > 0 ? getAllPossibleWalls('p2') : [];
+
+        // Сортируем ходы: сначала те, которые быстрее к цели
+        aiMoves.sort((a, b) => a.r - b.r);
+
+        for (const move of aiMoves) {
+            players.p2.r = move.r;
+            players.p2.c = move.c;
+            if (players.p2.r === 0) {
+                restoreState(state);
+                movePlayer(move.r, move.c);
+                return;
+            }
+            const score = minimax(MAX_DEPTH - 1, -Infinity, Infinity, false);
+            restoreState(state);
+            if (score > bestScore) {
+                bestScore = score;
+                bestAction = { type: 'move', r: move.r, c: move.c };
+            }
+        }
+
+        // Сортируем стены по "полезности": чем ближе к противнику, тем лучше
+        const p1 = players.p1;
+        aiWalls.sort((a, b) => {
+            const distA = Math.abs(a.r - p1.r) + Math.abs(a.c - p1.c);
+            const distB = Math.abs(b.r - p1.r) + Math.abs(b.c - p1.c);
+            return distA - distB;
+        });
+
+        // Анализируем ВСЕ стены (или хотя бы много, но без случайности)
+        for (const wall of aiWalls) {
+            applyWall(wall);
+            wallsLeft.p2--;
+            if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+                const score = minimax(MAX_DEPTH - 1, -Infinity, Infinity, false);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestAction = { type: 'wall', wall };
+                }
+            }
+            restoreState(state);
+        }
+
+        restoreState(state);
+        if (bestAction) {
+            if (bestAction.type === 'move') {
+                movePlayer(bestAction.r, bestAction.c);
+            } else {
+                const w = bestAction.wall;
+                placeWall(w.type, w.r, w.c);
+            }
+        } else {
+            if (moves.length) {
+                moves.sort((a, b) => a.r - b.r);
+                movePlayer(moves[0].r, moves[0].c);
+            }
+        }
+    }
+
+    function minimax(depth, alpha, beta, isMaximizing) {
+        if (players.p1.r === 8) return -100000 + (10 - depth);
+        if (players.p2.r === 0) return 100000 - (10 - depth);
+        if (depth === 0) return evaluatePosition();
+
+        const state = saveState();
+
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            const moves = getAvailableMoves('p2');
+            moves.sort((a, b) => a.r - b.r);
+            for (const move of moves.slice(0, 10)) {
+                players.p2.r = move.r;
+                players.p2.c = move.c;
+                if (players.p2.r === 0) { restoreState(state); return 100000; }
+                const evalScore = minimax(depth - 1, alpha, beta, false);
+                maxEval = Math.max(maxEval, evalScore);
+                alpha = Math.max(alpha, evalScore);
+                restoreState(state);
+                if (beta <= alpha) break;
+            }
+            if (wallsLeft.p2 > 0 && depth >= 2) {
+                const walls = getAllPossibleWalls('p2');
+                // Сортируем по близости к противнику для лучшего отсечения
+                walls.sort((a, b) => {
+                    const dA = Math.abs(a.r - players.p1.r) + Math.abs(a.c - players.p1.c);
+                    const dB = Math.abs(b.r - players.p1.r) + Math.abs(b.c - players.p1.c);
+                    return dA - dB;
+                });
+                for (const wall of walls.slice(0, 15)) {
+                    applyWall(wall);
+                    wallsLeft.p2--;
+                    if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+                        const evalScore = minimax(depth - 1, alpha, beta, false);
+                        maxEval = Math.max(maxEval, evalScore);
+                        alpha = Math.max(alpha, evalScore);
+                    }
+                    restoreState(state);
+                    if (beta <= alpha) break;
+                }
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            const moves = getAvailableMoves('p1');
+            moves.sort((a, b) => b.r - a.r);
+            for (const move of moves.slice(0, 10)) {
+                players.p1.r = move.r;
+                players.p1.c = move.c;
+                if (players.p1.r === 8) { restoreState(state); return -100000; }
+                const evalScore = minimax(depth - 1, alpha, beta, true);
+                minEval = Math.min(minEval, evalScore);
+                beta = Math.min(beta, evalScore);
+                restoreState(state);
+                if (beta <= alpha) break;
+            }
+            if (wallsLeft.p1 > 0 && depth >= 2) {
+                const walls = getAllPossibleWalls('p1');
+                walls.sort((a, b) => {
+                    const dA = Math.abs(a.r - players.p2.r) + Math.abs(a.c - players.p2.c);
+                    const dB = Math.abs(b.r - players.p2.r) + Math.abs(b.c - players.p2.c);
+                    return dA - dB;
+                });
+                for (const wall of walls.slice(0, 15)) {
+                    applyWall(wall);
+                    wallsLeft.p1--;
+                    if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+                        const evalScore = minimax(depth - 1, alpha, beta, true);
+                        minEval = Math.min(minEval, evalScore);
+                        beta = Math.min(beta, evalScore);
+                    }
+                    restoreState(state);
+                    if (beta <= alpha) break;
+                }
+            }
+            return minEval;
+        }
+    }
+
+    function evaluatePosition() {
+        const p1Dist = shortestPath(players.p1.r, players.p1.c, 8);
+        const p2Dist = shortestPath(players.p2.r, players.p2.c, 0);
+        if (p1Dist === Infinity) return 100000;
+        if (p2Dist === Infinity) return -100000;
+        let score = (p1Dist - p2Dist) * 120;
+        score += (wallsLeft.p2 - wallsLeft.p1) * 25;
+        score += (Math.abs(players.p1.c - 4) - Math.abs(players.p2.c - 4)) * 15;
+        const p1Moves = getAvailableMoves('p1').length;
+        const p2Moves = getAvailableMoves('p2').length;
+        score += (p2Moves - p1Moves) * 10;
+        score -= players.p2.r * 5;
+        if (players.p2.c === 0 || players.p2.c === 8) score -= 15;
+        return score;
+    }
+
+    function getWallAtMouse(mx, my) {
+        if (currentMode !== 'wall') return null;
+        const thr = CELL * 0.4;
+        for (const w of wallOptions) {
+            if (w.type === 'h') {
+                const y = PAD + (w.r + 1) * CELL;
+                const x1 = PAD + w.c * CELL, x2 = PAD + (w.c + 2) * CELL;
+                if (mx > x1 - thr && mx < x2 + thr && Math.abs(my - y) < thr) return w;
+            } else {
+                const x = PAD + (w.c + 1) * CELL;
+                const y1 = PAD + w.r * CELL, y2 = PAD + (w.r + 2) * CELL;
+                if (my > y1 - thr && my < y2 + thr && Math.abs(mx - x) < thr) return w;
+            }
+        }
+        return null;
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * sx;
+        const my = (e.clientY - rect.top) * sy;
+        hoveredWall = getWallAtMouse(mx, my);
+        draw();
+    });
+    canvas.addEventListener('mouseleave', () => { hoveredWall = null; draw(); });
+    canvas.addEventListener('click', (e) => {
+        if (gameOver) return;
+        if (mode === 'ai' && turn === 'p2') return;
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * sx;
+        const my = (e.clientY - rect.top) * sy;
+        if (currentMode === 'walk') {
+            const c = Math.floor((mx - PAD) / CELL);
+            const r = Math.floor((my - PAD) / CELL);
+            if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return;
+            if (moves.some(m => m.r === r && m.c === c)) {
+                if (movePlayer(r, c)) { switchTurn(); }
+            }
+        } else {
+            const w = getWallAtMouse(mx, my);
+            if (w && placeWall(w.type, w.r, w.c)) { switchTurn(); }
+        }
+    });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { e.preventDefault(); toggleMode(); }
+        if (e.key === 'Escape') { currentMode = 'walk'; hoveredWall = null; updateUI(); draw(); }
+    });
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#f2e2c3';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const x = PAD + c * CELL, y = PAD + r * CELL;
+                ctx.fillStyle = '#fff8ec';
+                ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+                ctx.strokeStyle = '#bba98c';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(x, y, CELL, CELL);
+            }
+        }
+        ctx.fillStyle = '#c49b4525';
+        for (let c = 0; c < SIZE; c++) ctx.fillRect(PAD + c * CELL, PAD + 8 * CELL, CELL, CELL);
+        ctx.fillStyle = '#4d74a025';
+        for (let c = 0; c < SIZE; c++) ctx.fillRect(PAD + c * CELL, PAD, CELL, CELL);
+        if (currentMode === 'wall' && !gameOver) {
+            for (const w of wallOptions) {
+                ctx.fillStyle = '#ffb74d50';
+                if (w.type === 'h') {
+                    ctx.fillRect(PAD + w.c * CELL + 4, PAD + (w.r + 1) * CELL - 4, CELL * 2 - 8, 8);
+                } else {
+                    ctx.fillRect(PAD + (w.c + 1) * CELL - 4, PAD + w.r * CELL + 4, 8, CELL * 2 - 8);
+                }
+            }
+        }
+        if (hoveredWall && currentMode === 'wall' && !gameOver) {
+            ctx.fillStyle = '#ff9800cc';
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = '#ff9800';
+            if (hoveredWall.type === 'h') {
+                ctx.fillRect(PAD + hoveredWall.c * CELL + 4, PAD + (hoveredWall.r + 1) * CELL - 4, CELL * 2 - 8, 8);
+            } else {
+                ctx.fillRect(PAD + (hoveredWall.c + 1) * CELL - 4, PAD + hoveredWall.r * CELL + 4, 8, CELL * 2 - 8);
+            }
+            ctx.shadowBlur = 0;
+        }
+        if (currentMode === 'walk' && !gameOver) {
+            for (const m of moves) {
+                const cx = PAD + m.c * CELL + CELL / 2, cy = PAD + m.r * CELL + CELL / 2;
+                ctx.fillStyle = m.jump ? '#f5e56c99' : '#b8d9a499';
+                ctx.beginPath();
+                ctx.arc(cx, cy, CELL / 4.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#4a5a30';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        }
+        ctx.strokeStyle = '#4a3220';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        for (let r = 0; r < SIZE - 1; r++)
+            for (let c = 0; c < SIZE; c++)
+                if (hWalls[r][c]) {
+                    ctx.beginPath();
+                    ctx.moveTo(PAD + c * CELL + 4, PAD + (r + 1) * CELL);
+                    ctx.lineTo(PAD + (c + 1) * CELL - 4, PAD + (r + 1) * CELL);
+                    ctx.stroke();
+                }
+        for (let r = 0; r < SIZE; r++)
+            for (let c = 0; c < SIZE - 1; c++)
+                if (vWalls[r][c]) {
+                    ctx.beginPath();
+                    ctx.moveTo(PAD + (c + 1) * CELL, PAD + r * CELL + 4);
+                    ctx.lineTo(PAD + (c + 1) * CELL, PAD + (r + 1) * CELL - 4);
+                    ctx.stroke();
+                }
+
+        function drawPlayer(row, col, color, label) {
+            const cx = PAD + col * CELL + CELL / 2;
+            const cy = PAD + row * CELL + CELL / 2;
+            ctx.save();
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00000060';
+            ctx.beginPath();
+            ctx.arc(cx, cy, CELL / 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 15px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx, cy);
+            ctx.restore();
+        }
+        drawPlayer(players.p1.r, players.p1.c, '#d1544a', '1');
+        drawPlayer(players.p2.r, players.p2.c, '#3f6ea8', '2');
+        if (gameOver) {
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = '#171710';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#fbe49b';
+            ctx.font = 'bold 22px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.fillText(winnerMsg, canvas.width / 2, canvas.height / 2);
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('wallInfo').textContent = `🧱 P1-${wallsLeft.p1} / P2-${wallsLeft.p2}`;
+        const el = document.getElementById('turnDisplay');
+        if (gameOver) el.innerHTML = `🏁 ${winnerMsg}`;
+        else el.innerHTML = turn === 'p1' ? '<span class="p1-dot"></span> Ход Игрока 1' : '<span class="p2-dot"></span> Ход Игрока 2';
+        const modeEl = document.getElementById('modeDisplay');
+        if (currentMode === 'walk') {
+            modeEl.textContent = '🚶 ХОДЬБА';
+            modeEl.className = 'mode-indicator mode-walk';
+        } else {
+            modeEl.textContent = '🧱 СТЕНЫ';
+            modeEl.className = 'mode-indicator mode-wall';
+        }
+    }
+
+    document.getElementById('newGameBtn').onclick = () => { mode = document.getElementById('modeSelect').value; reset(); };
+    document.getElementById('modeSelect').onchange = (e) => { mode = e.target.value; reset(); };
+    document.getElementById('saveBtn').onclick = () => {
+        if (!gameOver) { alert('Игра не завершена'); return; }
+        if (gameSaved) { alert('Результат уже сохранён'); return; }
+        autoSave();
+        alert('✅ Сохранено');
+    };
+    document.getElementById('clearHistoryBtn').onclick = () => {
+        clearDB();
+        updateHistoryPanel();
+    };
+
+    updateHistoryPanel();
+    mode = document.getElementById('modeSelect').value;
+    reset();
+})();
+</script>
+</body>
+</html>
