@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Коридор • Quoridor • Подсветка стен</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #1a241e;
+      font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      margin: 0;
+    }
+    .game-wrapper {
+      background: #26332b;
+      border-radius: 28px;
+      padding: 20px 22px 22px;
+      box-shadow: 0 20px 35px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 2px solid #4d6b55;
+      max-width: 620px;
+      width: fit-content;
+    }
+    canvas {
+      display: block;
+      background: #f2e2c3;
+      border-radius: 18px;
+      box-shadow: inset 0 0 12px #4a3828, 0 10px 18px black;
+      width: 100%;
+      height: auto;
+      max-width: 540px;
+      border: 3px solid #6b5a42;
+      cursor: pointer;
+    }
+    .panel {
+      width: 100%;
+      margin-top: 14px;
+      background: #1c2922;
+      border-radius: 28px;
+      padding: 12px 16px;
+      color: #f0e5cc;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: 0 4px 0 #0f1712;
+    }
+    .turn-badge {
+      font-weight: bold;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .p1-dot {
+      width: 18px;
+      height: 18px;
+      background: #d1544a;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px #ff9e9e;
+    }
+    .p2-dot {
+      width: 18px;
+      height: 18px;
+      background: #3f6ea8;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px #8ab3ff;
+    }
+    .mode-indicator {
+      background: #5a4a2e;
+      padding: 5px 14px;
+      border-radius: 18px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      transition: 0.2s;
+    }
+    .mode-walk {
+      background: #4a6b3a;
+      color: #d4f0b0;
+    }
+    .mode-wall {
+      background: #8b5a2b;
+      color: #ffe0b0;
+    }
+    button {
+      background: #e6cf94;
+      border: none;
+      font-weight: bold;
+      padding: 8px 16px;
+      border-radius: 24px;
+      cursor: pointer;
+      background: #f0daa5;
+      color: #2b2819;
+      box-shadow: 0 3px 0 #7d6e4c, 0 3px 8px black;
+      transition: 0.06s linear;
+      border: 1px solid #c4a164;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    button:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #5a4e34, 0 4px 6px black;
+    }
+    select {
+      padding: 8px 12px;
+      border-radius: 20px;
+      background: #f3e2bf;
+      font-weight: bold;
+      border: 1px solid #b4924a;
+      font-size: 0.85rem;
+    }
+    .wall-info {
+      background: #4c4332;
+      padding: 5px 14px;
+      border-radius: 18px;
+      font-weight: bold;
+      font-size: 0.9rem;
+    }
+    .hint {
+      color: #cfc19b;
+      font-size: 0.75rem;
+      text-align: center;
+      margin-top: 6px;
+      width: 100%;
+    }
+    .key-tag {
+      background: #b3a582;
+      padding: 2px 8px;
+      border-radius: 10px;
+      color: #1f2a1a;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+<div class="game-wrapper">
+  <canvas id="gameCanvas" width="540" height="540" aria-label="Коридор 9x9"></canvas>
+
+  <div class="panel">
+    <div class="turn-badge" id="turnDisplay">
+      <span class="p1-dot"></span> Ход Игрока 1
+    </div>
+    <div id="modeDisplay" class="mode-indicator mode-walk">🚶 Режим: ХОДЬБА</div>
+    <div class="wall-info" id="wallInfo">🧱 Стены: P1-10 / P2-10</div>
+    <select id="modeSelect">
+      <option value="pvp">👥 2 игрока</option>
+      <option value="aiEasy">🤖 ИИ Лёгкий</option>
+      <option value="aiMedium">🤖 ИИ Средний</option>
+      <option value="aiHard">🤖 ИИ Сложный</option>
+    </select>
+    <button id="newGameBtn">🔄 Новая</button>
+    <button id="saveBtn">💾</button>
+    <button id="historyBtn">📂</button>
+  </div>
+  <div class="hint">
+    🖱️ <span class="key-tag">Клик</span> — действие &nbsp;|&nbsp;
+    🔄 <span class="key-tag">ПРОБЕЛ</span> — режим &nbsp;|&nbsp;
+    🎯 <span class="key-tag">Наведи</span> — подсветка стены
+  </div>
+</div>
+
+<script>
+  (function() {
+    const SIZE = 9;
+    const CELL = 54;
+    const PAD = 18;
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = SIZE * CELL + PAD * 2;
+    canvas.height = SIZE * CELL + PAD * 2;
+
+    let hWalls = Array(SIZE - 1).fill().map(() => Array(SIZE).fill(false));
+    let vWalls = Array(SIZE).fill().map(() => Array(SIZE - 1).fill(false));
+    let wallsLeft = { p1: 10, p2: 10 };
+    let players = { p1: { r: 0, c: 4 }, p2: { r: 8, c: 4 } };
+    let turn = 'p1';
+    let gameOver = false;
+    let winnerMsg = '';
+    let mode = 'pvp';
+    let currentMode = 'walk';
+    let moves = [];
+    let wallOptions = [];
+    let hoveredWall = null; // стена под курсором
+
+    const STORE = 'quoridor9_db';
+    const getDB = () => JSON.parse(localStorage.getItem(STORE) || '[]');
+    const saveDB = (r) => { const d = getDB(); d.push(r); localStorage.setItem(STORE, JSON.stringify(d)); };
+
+    function reset() {
+      hWalls = Array(SIZE - 1).fill().map(() => Array(SIZE).fill(false));
+      vWalls = Array(SIZE).fill().map(() => Array(SIZE - 1).fill(false));
+      wallsLeft = { p1: 10, p2: 10 };
+      players = { p1: { r: 0, c: 4 }, p2: { r: 8, c: 4 } };
+      turn = 'p1';
+      gameOver = false;
+      winnerMsg = '';
+      currentMode = 'walk';
+      hoveredWall = null;
+      calcMoves();
+      calcWallOptions();
+      updateUI();
+      draw();
+    }
+
+    function canPass(r, c, nr, nc) {
+      if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) return false;
+      const dr = nr - r, dc = nc - c;
+      if (dr === -1) return !hWalls[r - 1][c];
+      if (dr === 1) return !hWalls[r][c];
+      if (dc === -1) return !vWalls[r][c - 1];
+      if (dc === 1) return !vWalls[r][c];
+      return false;
+    }
+
+    function hasPath(sr, sc, targetRow) {
+      const vis = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+      const q = [{ r: sr, c: sc }];
+      vis[sr][sc] = true;
+      const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      while (q.length) {
+        const { r, c } = q.shift();
+        if (r === targetRow) return true;
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+          if (!canPass(r, c, nr, nc)) continue;
+          if (!vis[nr][nc]) {
+            vis[nr][nc] = true;
+            q.push({ r: nr, c: nc });
+          }
+        }
+      }
+      return false;
+    }
+
+    function checkWin() {
+      if (players.p1.r === 8) { gameOver = true; winnerMsg = '🏆 Игрок 1 победил!'; }
+      else if (players.p2.r === 0) { gameOver = true; winnerMsg = '🏆 Игрок 2 победил!'; }
+      updateUI();
+    }
+
+    function calcMoves() {
+      if (gameOver) { moves = []; return; }
+      const p = players[turn];
+      const other = turn === 'p1' ? players.p2 : players.p1;
+      const res = [];
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nr = p.r + dr, nc = p.c + dc;
+        if (!canPass(p.r, p.c, nr, nc)) continue;
+        if (nr === other.r && nc === other.c) {
+          const jr = nr + dr, jc = nc + dc;
+          if (jr >= 0 && jr < SIZE && jc >= 0 && jc < SIZE &&
+              canPass(nr, nc, jr, jc) &&
+              !(jr === players.p1.r && jc === players.p1.c) &&
+              !(jr === players.p2.r && jc === players.p2.c)) {
+            res.push({ r: jr, c: jc, jump: true });
+          }
+        } else {
+          res.push({ r: nr, c: nc, jump: false });
+        }
+      }
+      moves = res;
+    }
+
+    function calcWallOptions() {
+      if (gameOver) { wallOptions = []; return; }
+      const key = turn === 'p1' ? 'p1' : 'p2';
+      if (wallsLeft[key] <= 0) { wallOptions = []; return; }
+      const options = [];
+      for (let r = 0; r < SIZE - 1; r++) {
+        for (let c = 0; c < SIZE - 1; c++) {
+          if (!hWalls[r][c] && !hWalls[r][c + 1]) {
+            hWalls[r][c] = true;
+            hWalls[r][c + 1] = true;
+            if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+              options.push({ type: 'h', r, c });
+            }
+            hWalls[r][c] = false;
+            hWalls[r][c + 1] = false;
+          }
+        }
+      }
+      for (let r = 0; r < SIZE - 1; r++) {
+        for (let c = 0; c < SIZE - 1; c++) {
+          if (!vWalls[r][c] && !vWalls[r + 1][c]) {
+            vWalls[r][c] = true;
+            vWalls[r + 1][c] = true;
+            if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+              options.push({ type: 'v', r, c });
+            }
+            vWalls[r][c] = false;
+            vWalls[r + 1][c] = false;
+          }
+        }
+      }
+      wallOptions = options;
+    }
+
+    function movePlayer(r, c) {
+      if (!moves.some(m => m.r === r && m.c === c)) return false;
+      players[turn].r = r;
+      players[turn].c = c;
+      checkWin();
+      return true;
+    }
+
+    function placeWall(type, r, c) {
+      if (gameOver) return false;
+      const key = turn === 'p1' ? 'p1' : 'p2';
+      if (wallsLeft[key] <= 0) return false;
+      if (type === 'h') {
+        if (hWalls[r][c] || hWalls[r][c + 1]) return false;
+        hWalls[r][c] = true;
+        hWalls[r][c + 1] = true;
+      } else {
+        if (vWalls[r][c] || vWalls[r + 1][c]) return false;
+        vWalls[r][c] = true;
+        vWalls[r + 1][c] = true;
+      }
+      if (hasPath(players.p1.r, players.p1.c, 8) && hasPath(players.p2.r, players.p2.c, 0)) {
+        wallsLeft[key]--;
+        return true;
+      } else {
+        if (type === 'h') { hWalls[r][c] = false; hWalls[r][c + 1] = false; }
+        else { vWalls[r][c] = false; vWalls[r + 1][c] = false; }
+        return false;
+      }
+    }
+
+    function endTurn() {
+      if (gameOver) return;
+      turn = turn === 'p1' ? 'p2' : 'p1';
+      currentMode = 'walk';
+      hoveredWall = null;
+      calcMoves();
+      calcWallOptions();
+      updateUI();
+      draw();
+      if (mode !== 'pvp' && turn === 'p2' && !gameOver) {
+        setTimeout(aiTurn, 250);
+      }
+    }
+
+    function toggleMode() {
+      if (gameOver) return;
+      currentMode = currentMode === 'walk' ? 'wall' : 'walk';
+      hoveredWall = null;
+      updateUI();
+      draw();
+    }
+
+    // --- ИИ ---
+    function aiTurn() {
+      if (gameOver || turn !== 'p2') return;
+      calcMoves();
+      calcWallOptions();
+      if (mode === 'aiEasy') aiEasy();
+      else if (mode === 'aiMedium') aiMedium();
+      else aiHard();
+      draw();
+      updateUI();
+    }
+
+    function aiEasy() {
+      if (Math.random() < 0.4 && wallOptions.length > 0) {
+        const w = wallOptions[Math.floor(Math.random() * wallOptions.length)];
+        if (placeWall(w.type, w.r, w.c)) return;
+      }
+      if (moves.length) {
+        const m = moves[Math.floor(Math.random() * moves.length)];
+        movePlayer(m.r, m.c);
+      }
+    }
+
+    function aiMedium() {
+      if (wallOptions.length > 0 && Math.random() < 0.3) {
+        const w = wallOptions[Math.floor(Math.random() * wallOptions.length)];
+        if (placeWall(w.type, w.r, w.c)) return;
+      }
+      if (moves.length) {
+        moves.sort((a, b) => a.r - b.r);
+        movePlayer(moves[0].r, moves[0].c);
+      }
+    }
+
+    function aiHard() {
+      if (wallOptions.length > 0 && Math.random() < 0.5) {
+        const p1 = players.p1;
+        let bestWall = null;
+        for (const w of wallOptions) {
+          if (w.type === 'h' && (w.r === p1.r || w.r === p1.r - 1)) { bestWall = w; break; }
+          if (w.type === 'v' && (w.c === p1.c || w.c === p1.c - 1)) { bestWall = w; break; }
+        }
+        if (bestWall && placeWall(bestWall.type, bestWall.r, bestWall.c)) return;
+        const w = wallOptions[Math.floor(Math.random() * wallOptions.length)];
+        if (placeWall(w.type, w.r, w.c)) return;
+      }
+      if (moves.length) {
+        moves.sort((a, b) => a.r - b.r);
+        movePlayer(moves[0].r, moves[0].c);
+      }
+    }
+
+    // Определение стены под курсором
+    function getWallAtMouse(mx, my) {
+      if (currentMode !== 'wall') return null;
+      const thr = CELL * 0.4;
+      for (const w of wallOptions) {
+        if (w.type === 'h') {
+          const y = PAD + (w.r + 1) * CELL;
+          const x1 = PAD + w.c * CELL;
+          const x2 = PAD + (w.c + 2) * CELL;
+          if (mx > x1 - thr && mx < x2 + thr && Math.abs(my - y) < thr) {
+            return w;
+          }
+        } else {
+          const x = PAD + (w.c + 1) * CELL;
+          const y1 = PAD + w.r * CELL;
+          const y2 = PAD + (w.r + 2) * CELL;
+          if (my > y1 - thr && my < y2 + thr && Math.abs(mx - x) < thr) {
+            return w;
+          }
+        }
+      }
+      return null;
+    }
+
+    // --- МЫШЬ ---
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * sx;
+      const my = (e.clientY - rect.top) * sy;
+      const prev = hoveredWall;
+      hoveredWall = getWallAtMouse(mx, my);
+      if (prev !== hoveredWall) draw();
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      hoveredWall = null;
+      draw();
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (gameOver) return;
+      if (mode !== 'pvp' && turn === 'p2') return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * sx;
+      const my = (e.clientY - rect.top) * sy;
+
+      if (currentMode === 'walk') {
+        const c = Math.floor((mx - PAD) / CELL);
+        const r = Math.floor((my - PAD) / CELL);
+        if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return;
+        if (moves.some(m => m.r === r && m.c === c)) {
+          if (movePlayer(r, c)) { endTurn(); return; }
+        }
+      } else if (currentMode === 'wall') {
+        const w = getWallAtMouse(mx, my);
+        if (w && placeWall(w.type, w.r, w.c)) {
+          endTurn();
+        }
+      }
+    });
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        toggleMode();
+      }
+      if (e.key === 'Escape') {
+        currentMode = 'walk';
+        hoveredWall = null;
+        updateUI();
+        draw();
+      }
+    });
+
+    // --- ОТРИСОВКА ---
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#f2e2c3';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Сетка
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const x = PAD + c * CELL, y = PAD + r * CELL;
+          ctx.fillStyle = '#fff8ec';
+          ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+          ctx.strokeStyle = '#bba98c';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(x, y, CELL, CELL);
+        }
+      }
+
+      // Цели
+      ctx.fillStyle = '#c49b4525';
+      for (let c = 0; c < SIZE; c++) ctx.fillRect(PAD + c * CELL, PAD + 8 * CELL, CELL, CELL);
+      ctx.fillStyle = '#4d74a025';
+      for (let c = 0; c < SIZE; c++) ctx.fillRect(PAD + c * CELL, PAD, CELL, CELL);
+
+      // Подсветка доступных стен (все)
+      if (currentMode === 'wall' && !gameOver) {
+        for (const w of wallOptions) {
+          ctx.fillStyle = '#ffb74d50';
+          if (w.type === 'h') {
+            const x = PAD + w.c * CELL + 4;
+            const y = PAD + (w.r + 1) * CELL - 4;
+            ctx.fillRect(x, y, CELL * 2 - 8, 8);
+          } else {
+            const x = PAD + (w.c + 1) * CELL - 4;
+            const y = PAD + w.r * CELL + 4;
+            ctx.fillRect(x, y, 8, CELL * 2 - 8);
+          }
+        }
+      }
+
+      // Подсветка стены под курсором (ярче)
+      if (hoveredWall && currentMode === 'wall' && !gameOver) {
+        ctx.fillStyle = '#ff9800cc';
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#ff9800';
+        if (hoveredWall.type === 'h') {
+          const x = PAD + hoveredWall.c * CELL + 4;
+          const y = PAD + (hoveredWall.r + 1) * CELL - 4;
+          ctx.fillRect(x, y, CELL * 2 - 8, 8);
+        } else {
+          const x = PAD + (hoveredWall.c + 1) * CELL - 4;
+          const y = PAD + hoveredWall.r * CELL + 4;
+          ctx.fillRect(x, y, 8, CELL * 2 - 8);
+        }
+        ctx.shadowBlur = 0;
+      }
+
+      // Подсветка ходов
+      if (currentMode === 'walk' && !gameOver) {
+        for (const m of moves) {
+          const cx = PAD + m.c * CELL + CELL / 2, cy = PAD + m.r * CELL + CELL / 2;
+          ctx.fillStyle = m.jump ? '#f5e56c99' : '#b8d9a499';
+          ctx.beginPath();
+          ctx.arc(cx, cy, CELL / 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#4a5a30';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+
+      // Стены
+      ctx.strokeStyle = '#4a3220';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      for (let r = 0; r < SIZE - 1; r++)
+        for (let c = 0; c < SIZE; c++)
+          if (hWalls[r][c]) {
+            ctx.beginPath();
+            ctx.moveTo(PAD + c * CELL + 4, PAD + (r + 1) * CELL);
+            ctx.lineTo(PAD + (c + 1) * CELL - 4, PAD + (r + 1) * CELL);
+            ctx.stroke();
+          }
+      for (let r = 0; r < SIZE; r++)
+        for (let c = 0; c < SIZE - 1; c++)
+          if (vWalls[r][c]) {
+            ctx.beginPath();
+            ctx.moveTo(PAD + (c + 1) * CELL, PAD + r * CELL + 4);
+            ctx.lineTo(PAD + (c + 1) * CELL, PAD + (r + 1) * CELL - 4);
+            ctx.stroke();
+          }
+
+      // Игроки
+      const drawP = (r, c, col, lbl) => {
+        const cx = PAD + c * CELL + CELL / 2, cy = PAD + r * CELL + CELL / 2;
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00000060';
+        ctx.beginPath();
+        ctx.arc(cx, cy, CELL / 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 15px "Segoe UI"';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lbl, cx, cy);
+        ctx.restore();
+      };
+      drawP(players.p1.r, players.p1.c, '#d1544a', '1');
+      drawP(players.p2.r, players.p2.c, '#3f6ea8', '2');
+
+      if (gameOver) {
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#171710';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fbe49b';
+        ctx.font = 'bold 22px "Segoe UI"';
+        ctx.textAlign = 'center';
+        ctx.fillText(winnerMsg, canvas.width / 2, canvas.height / 2);
+      }
+    }
+
+    function updateUI() {
+      document.getElementById('wallInfo').textContent = `🧱 Стены: P1-${wallsLeft.p1} / P2-${wallsLeft.p2}`;
+      const el = document.getElementById('turnDisplay');
+      if (gameOver) el.innerHTML = `🏁 ${winnerMsg}`;
+      else el.innerHTML = turn === 'p1' ? '<span class="p1-dot"></span> Ход Игрока 1' : '<span class="p2-dot"></span> Ход Игрока 2';
+
+      const modeEl = document.getElementById('modeDisplay');
+      if (currentMode === 'walk') {
+        modeEl.textContent = '🚶 Режим: ХОДЬБА';
+        modeEl.className = 'mode-indicator mode-walk';
+      } else {
+        modeEl.textContent = '🧱 Режим: СТЕНЫ';
+        modeEl.className = 'mode-indicator mode-wall';
+      }
+    }
+
+    document.getElementById('newGameBtn').onclick = () => { mode = document.getElementById('modeSelect').value; reset(); };
+    document.getElementById('modeSelect').onchange = (e) => { mode = e.target.value; reset(); };
+    document.getElementById('saveBtn').onclick = () => {
+      if (!gameOver) { alert('Игра не завершена'); return; }
+      saveDB({ date: new Date().toLocaleString(), winner: winnerMsg, mode });
+      alert('✅ Сохранено');
+    };
+    document.getElementById('historyBtn').onclick = () => {
+      const d = getDB();
+      if (!d.length) alert('История пуста');
+      else alert('Последние 5:\n' + d.slice(-5).reverse().map((x, i) => `${i + 1}. ${x.date} - ${x.winner}`).join('\n'));
+    };
+
+    mode = document.getElementById('modeSelect').value;
+    reset();
+  })();
+</script>
+</body>
+</html>
